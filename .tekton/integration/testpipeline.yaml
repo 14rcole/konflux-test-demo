@@ -30,3 +30,58 @@ spec:
             value: main
           - name: pathInRepo
             value: .tekton/integration/sample-task.yaml
+    - name: provision-namespace
+      taskRef:
+        resolver: git 
+        params:
+          - name: url 
+            value: https://github.com/konflux-ci/build-definitions.git
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: task/provision-env-with-ephemeral-namespace/0.1/provision-env-with-ephemeral-namespace.yaml
+      params:
+        - name: KONFLUXNAMESPACE
+          value: $(context.pipelineRun.namespace)
+        - name: PIPELINERUN_NAME
+          value: $(context.pipelineRun.name)
+        - name: PIPELINERUN_UID
+          value: $(context.pipelineRun.uid)
+    - name: deploy-container
+      runAfter:
+        - provision-namespace
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/14rcole/konflux-test-demo.git
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: .tekton/integration/deploy.yaml
+      params:
+        - name: serviceaccount-secret
+          value: $(tasks.provision-namespace.results.secretRef)
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: pod-name
+          value: $(params.pod-and-svc-name)
+    - name: run-tests
+      runAfter:
+        - deploy-container
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/14rcole/konflux-test-demo.git
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: .tekton/integration/test.yaml
+      params:
+        - name: serviceaccount-secret
+          value: $(tasks.provision-namespace.results.secretRef)
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: svc-name
+          value: $(params.pod-and-svc-name)
